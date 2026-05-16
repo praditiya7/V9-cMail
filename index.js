@@ -26,6 +26,8 @@ function randomString(length) {
 function generateFakeEmail() {
   const prefixList = [
     'cemy',
+    'vemy',
+    'lemy',
     'xemy',
     'emyx',
     'zemy',
@@ -35,11 +37,9 @@ function generateFakeEmail() {
   ];
 
   const randomPrefix = prefixList[Math.floor(Math.random() * prefixList.length)];
-
   const randomPart = randomString(6);
-
+  
   const email = `${randomPrefix}${randomPart}@gmail.com`;
-
   const password = `${randomPrefix}${randomString(8)}`;
 
   return {
@@ -69,7 +69,7 @@ Halo ${username} 👋
 /CheckPoint
 /TopupPoint
 
-⚠️ Bot ini hanya simulasi/fake generator.
+⚠️ Bot ini hanya membuat email baru, gunakan secara bijak.
 `;
 
   bot.sendMessage(chatId, menu);
@@ -117,4 +117,16 @@ bot.onText(/\/CheckPoint/, (msg) => {
   const chatId = msg.chat.id;
 
   if (!userPoints[chatId]) {
+    userPoints[chatId] = 20;
+  }
+
+  bot.sendMessage(chatId, `💰 Sisa Point Kamu: ${userPoints[chatId]} Point.`);
+});
+
+// Contoh sederhana untuk TopupPoint (agar fitur di menu tidak kosong)
+bot.onText(/\/TopupPoint/, (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, `ℹ️ Untuk topup point, silakan hubungi admin/owner di ID: ${OWNER_ID || 'Belum diatur'}`);
+});
+
 console.log('Bot berjalan...');
