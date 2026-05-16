@@ -9,7 +9,7 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
 const OWNER_ID = process.env.OWNER_ID; 
 
 // Link Gambar QRIS (Ganti dengan link gambar QRIS asli milikmu)
-const QRIS_IMAGE_URL = 'https://picsum.photos/500/500'; // Sementara menggunakan contoh, silakan ganti nanti
+const QRIS_IMAGE_URL = 'https://qu.ax/g1eRh'; // Sementara menggunakan contoh, silakan ganti nanti
 
 // Database sederhana berbasis RAM (Penyimpanan sementara)
 const userPoints = {};
