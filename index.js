@@ -10,37 +10,65 @@ const OWNER_ID = process.env.OWNER_ID;
 // Database sederhana RAM
 const userPoints = {};
 
-// Generate random string
+// Daftar nama depan yang cocok dikombinasikan dengan unsur "Emy"
+const firstNames = [
+  'andi', 'budi', 'rizky', 'fajar', 'dika', 'reza', 'tomi', 'kevin', 'putra', 'ari',
+  'siti', 'dewi', 'amanda', 'putri', 'santi', 'mega', 'rara', 'nisa', 'via', 'ayu',
+  'ahmad', 'raffi', 'daffa', 'fian', 'gali', 'hadi', 'ilham', 'joko', 'kiki', 'lucky'
+];
+
+// Variasi unsur "Emy" untuk nama belakang (Last Name) sesuai request
+const emyLastNames = ['emy', 'emyx', 'zemy', 'cemy', 'xemy', 'emyc', 'emyz', 'vemy', 'lemy', 'qemy'];
+
+// Daftar domain email variatif
+const domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'];
+
+// Generate random string untuk password yang kuat
 function randomString(length) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
-
   for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-
   return result;
 }
 
-// Generate fake email
+// Generate fake email dengan format nama + unsur Emy yang realistis
 function generateFakeEmail() {
-  const prefixList = [
-    'cemy',
-    'vemy',
-    'lemy',
-    'xemy',
-    'emyx',
-    'zemy',
-    'emyc',
-    'qemy',
-    'emyz'
-  ];
-
-  const randomPrefix = prefixList[Math.floor(Math.random() * prefixList.length)];
-  const randomPart = randomString(6);
+  // 1. Pilih nama depan, variasi emy, dan domain secara acak
+  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const emyLastName = emyLastNames[Math.floor(Math.random() * emyLastNames.length)];
+  const domain = domains[Math.floor(Math.random() * domains.length)];
   
-  const email = `${randomPrefix}${randomPart}@gmail.com`;
-  const password = `${randomPrefix}${randomString(8)}`;
+  // 2. Buat angka acak dan format tahun untuk tambahan variasi manis
+  const randomNum = Math.floor(Math.random() * 899) + 100; // Angka acak 3 digit (100-999)
+  const shortYear = new Date().getFullYear().toString().slice(-2); // Dua angka belakang tahun saat ini
+
+  // 3. Struktur variasi pola email (4 kombinasi berbeda)
+  const patternType = Math.floor(Math.random() * 4);
+  let emailName = '';
+
+  switch (patternType) {
+    case 0:
+      // Pola langsung menyambung + angka acak: andiemy999
+      emailName = `${firstName}${emyLastName}${randomNum}`;
+      break;
+    case 1:
+      // Pola menggunakan titik + tahun: budi.zemy26
+      emailName = `${firstName}.${emyLastName}${shortYear}`;
+      break;
+    case 2:
+      // Pola bersih dengan titik: rizky.cemy
+      emailName = `${firstName}.${emyLastName}`;
+      break;
+    case 3:
+      // Pola langsung tanpa angka: fajaremyx
+      emailName = `${firstName}${emyLastName}`;
+      break;
+  }
+
+  const email = `${emailName}@${domain}`;
+  const password = `${emyLastName}${randomString(8)}`;
 
   return {
     email,
