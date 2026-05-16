@@ -1,7 +1,7 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 
-// Inisialisasi Bot
+// Inisialisasi Bot dengan Polling Berkelanjutan
 const bot = new TelegramBot(process.env.BOT_TOKEN, {
   polling: true,
 });
@@ -72,7 +72,7 @@ function isUserPremium(chatId) {
 }
 
 // -------------------------------------------------------------
-// FIX: CORES CALLBACK QUERY LISTENER (Dipastikan Merespons 100%)
+// CENTRAL CALLBACK QUERY LISTENER (PRODUKSI AMAN)
 // -------------------------------------------------------------
 bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data;
@@ -82,29 +82,31 @@ bot.on('callback_query', async (callbackQuery) => {
   const chatId = msg.chat.id;
 
   try {
-    // Beritahu Telegram bahwa sinyal tombol telah diterima (menghilangkan loading di tombol)
+    // Pastikan user terdaftar di RAM database sebelum kalkulasi poin dilakukan
+    initializeUser(chatId);
+
+    // Kirim sinyal acknowledge ke Telegram agar tombol berhenti loading
     await bot.answerCallbackQuery(callbackQuery.id);
 
-    // Filter aksi klik domain email
     if (data && data.startsWith('dom_')) {
       const selectedDomain = data.split('_')[1];
       
-      // Hapus tombol pilihan lama agar tampilan chat bersih
+      // Bersihkan komponen tombol lama
       await bot.deleteMessage(chatId, msg.message_id).catch(() => {});
       
-      // Alihkan eksekusi ke modul generator email
+      // Eksekusi generator email
       await deployEmailProcess(chatId, selectedDomain);
     }
   } catch (error) {
-    console.error('Error handling callback query:', error.message);
+    console.error('Error pada Callback Query System:', error.message);
+    bot.sendMessage(chatId, `\`[SYSTEM ERROR]\` Kegagalan internal eksekusi enkripsi data.`, { parse_mode: 'Markdown' }).catch(() => {});
   }
 });
 
 // -------------------------------------------------------------
-// SUBSYSTEM: GENERATOR & DEPLOYMENT SERVER EMAIL
+// ENGINE GENERATOR & DEPLOYMENT SERVER EMAIL
 // -------------------------------------------------------------
 async function deployEmailProcess(chatId, selectedDomain) {
-  initializeUser(chatId);
   const today = new Date().toDateString();
   const isAdmin = String(chatId) === String(OWNER_ID);
 
@@ -144,7 +146,7 @@ Silakan lakukan pengisian saldo premium melalui menu /TopupPoint.
       return bot.sendMessage(chatId, teksLimitHabis, { parse_mode: 'Markdown' });
     }
 
-    // Alokasikan pemotongan biaya / kuota harian
+    // Pemotongan Poin Struktural aman karena userPoints dipastikan terdefinisi
     if (userPoints[chatId] >= 5) {
       userPoints[chatId] -= 5;
     } else {
@@ -152,7 +154,7 @@ Silakan lakukan pengisian saldo premium melalui menu /TopupPoint.
     }
   }
 
-  // Animasi Pemrosesan Elegan
+  // Efek Loading Estetik & Minimalis
   const loadingMsg = await bot.sendMessage(chatId, `\`[SYSTEM PROLOG]\` Connecting to virtual node pool \`${selectedDomain}\`...`, { parse_mode: 'Markdown' });
 
   await sleep(1000);
@@ -169,7 +171,7 @@ Silakan lakukan pengisian saldo premium melalui menu /TopupPoint.
     parse_mode: 'Markdown'
   }).catch(() => {});
 
-  // Output Hasil Pembuatan Email
+  // Output Hasil Akhir
   await sleep(800);
   const fakeData = generateFakeEmail(selectedDomain);
   const sisaPoinTeks = isAdmin ? 'Unlimited (Admin)' : `${userPoints[chatId]} Points`;
@@ -204,7 +206,7 @@ _Catatan: Ketuk satu kali pada bagian Email atau Password untuk menyalin data ke
 // -------------------------------------------------------------
 // COMMAND: /start
 // -------------------------------------------------------------
-bot.onText(/\/start/, (msg) => {
+bot.onText(/\/start/i, (msg) => {
   const chatId = msg.chat.id;
   const username = msg.from.first_name;
 
@@ -244,9 +246,9 @@ Selamat datang, *${username}*. Sistem siap mengonfigurasi dan mendeploy virtual 
 });
 
 // -------------------------------------------------------------
-// COMMAND: /CreateMailR
+// COMMAND: /CreateMailR (Case Insensitive Fix)
 // -------------------------------------------------------------
-bot.onText(/\/CreateMailR/, (msg) => {
+bot.onText(/\/CreateMailR/i, (msg) => {
   const chatId = msg.chat.id;
   initializeUser(chatId);
 
@@ -288,7 +290,7 @@ _Pilih interaksi node melalui tombol di bawah ini:_
 // -------------------------------------------------------------
 // COMMAND: /CheckPoint
 // -------------------------------------------------------------
-bot.onText(/\/CheckPoint/, (msg) => {
+bot.onText(/\/CheckPoint/i, (msg) => {
   const chatId = msg.chat.id;
   initializeUser(chatId);
 
@@ -315,7 +317,7 @@ Berhasil memuat sinkronisasi metadata enkripsi akun Anda dari awan:
 // -------------------------------------------------------------
 // COMMAND: /TopupPoint
 // -------------------------------------------------------------
-bot.onText(/\/TopupPoint/, (msg) => {
+bot.onText(/\/TopupPoint/i, (msg) => {
   const chatId = msg.chat.id;
 
   const topupCaption = `
@@ -355,9 +357,9 @@ Silakan lakukan transaksi penambahan poin lisensi atau aktivasi akun premium mel
 });
 
 // -------------------------------------------------------------
-// ADMIN CONSOLE: /isi
+// CONSOLE MANAGEMENT: /isi
 // -------------------------------------------------------------
-bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
+bot.onText(/\/isi (\d+) (\d+)/i, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
   const targetUserChatId = match[1]; 
   const pointsToAdd = parseInt(match[2]); 
@@ -376,9 +378,9 @@ bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
 });
 
 // -------------------------------------------------------------
-// ADMIN CONSOLE: /premium
+// CONSOLE MANAGEMENT: /premium
 // -------------------------------------------------------------
-bot.onText(/\/premium (\d+)/, (msg, match) => {
+bot.onText(/\/premium (\d+)/i, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
   const targetUserChatId = match[1];
 
@@ -407,4 +409,4 @@ Terima kasih atas kemitraan Anda. Jalur enkripsi premium kini siap dieksekusi di
   bot.sendMessage(targetUserChatId, pesanKeUser, { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-console.log('EmyCMail Bot (v3.5 Professional Elegant) successfully compiled and running.');
+console.log('EmyCMail Bot v3.5 Professional Elegant has been deployed completely.');
