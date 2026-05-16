@@ -155,29 +155,37 @@ _Pilih interaksi node melalui tombol di bawah ini:_
 });
 
 // -------------------------------------------------------------
-// PROCESS DOMAIN INTERACTION (PERBAIKAN TOTAL DI SINI)
+// MAIN CALLBACK LISTENER (Menggunakan Struktur Global Paling Stabil)
 // -------------------------------------------------------------
-bot.on('callback_query', async (callbackQuery) => {
+bot.on('callback_query', (callbackQuery) => {
   const data = callbackQuery.data;
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
 
-  // Memberitahu Telegram bahwa callback berhasil diterima agar tombol tidak loading terus
+  // Langsung jawab callback di awal agar Telegram melepas status loading pada tombol
   bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
 
-  // Pastikan callback data yang masuk sesuai dengan format domain kita
   if (data && data.startsWith('dom_')) {
     const selectedDomain = data.split('_')[1];
-    const today = new Date().toDateString();
-    const isAdmin = String(chatId) === String(OWNER_ID);
-
-    // Hapus panel pilihan lama agar bersih
+    
+    // Hapus tombol pilihan agar bersih
     bot.deleteMessage(chatId, msg.message_id).catch(() => {});
+    
+    // Alihkan pemrosesan ke fungsi terpisah agar tidak mengganggu internal event loop library
+    deployEmailProcess(chatId, selectedDomain);
+  }
+});
 
-    // Validasi Dedicated Premium Node (Outlook / Yahoo)
-    if (selectedDomain === 'outlook.com' || selectedDomain === 'yahoo.com') {
-      if (!isUserPremium(chatId)) {
-        const teksTolakPremium = `
+// Fungsi Terpisah untuk Mengamankan Eksekusi Sinkronisasi Data Email
+async function deployEmailProcess(chatId, selectedDomain) {
+  initializeUser(chatId);
+  const today = new Date().toDateString();
+  const isAdmin = String(chatId) === String(OWNER_ID);
+
+  // Validasi Dedicated Premium Node (Outlook / Yahoo)
+  if (selectedDomain === 'outlook.com' || selectedDomain === 'yahoo.com') {
+    if (!isUserPremium(chatId)) {
+      const teksTolakPremium = `
 *SECURITY ACCESS DENIED*
 ───────────────────────
 Sistem menolak otentikasi. Jalur server dedicated *${selectedDomain}* memerlukan tingkat akun yang lebih tinggi.
@@ -189,14 +197,14 @@ Sistem menolak otentikasi. Jalur server dedicated *${selectedDomain}* memerlukan
 Gunakan perintah /TopupPoint untuk menghubungi administrasi.
 ───────────────────────
 `;
-        return bot.sendMessage(chatId, teksTolakPremium, { parse_mode: 'Markdown' });
-      }
+      return bot.sendMessage(chatId, teksTolakPremium, { parse_mode: 'Markdown' });
     }
+  }
 
-    // Validasi Standard Node (Gmail)
-    if (selectedDomain === 'gmail.com' && !isAdmin) {
-      if (userPoints[chatId] < 5 && userDailyLimit[chatId] === today) {
-        const teksLimitHabis = `
+  // Validasi Standard Node (Gmail)
+  if (selectedDomain === 'gmail.com' && !isAdmin) {
+    if (userPoints[chatId] < 5 && userDailyLimit[chatId] === today) {
+      const teksLimitHabis = `
 *RATE LIMIT EXCEEDED*
 ───────────────────────
 Sistem mendeteksi alokasi kuota harian untuk lisensi *Free Tier* Anda telah habis.
@@ -207,40 +215,40 @@ Sistem mendeteksi alokasi kuota harian untuk lisensi *Free Tier* Anda telah habi
 Silakan lakukan pengisian saldo premium melalui menu /TopupPoint.
 ───────────────────────
 `;
-        return bot.sendMessage(chatId, teksLimitHabis, { parse_mode: 'Markdown' });
-      }
-
-      // Alokasikan pemotongan biaya / kuota
-      if (userPoints[chatId] >= 5) {
-        userPoints[chatId] -= 5;
-      } else {
-        userDailyLimit[chatId] = today;
-      }
+      return bot.sendMessage(chatId, teksLimitHabis, { parse_mode: 'Markdown' });
     }
 
-    // Jalankan Animasi Proses Enkripsi
-    const loadingMsg = await bot.sendMessage(chatId, `\`[SYSTEM PROLOG]\` Connecting to virtual node pool \`${selectedDomain}\`...`, { parse_mode: 'Markdown' });
+    // Alokasikan pemotongan biaya / kuota harian
+    if (userPoints[chatId] >= 5) {
+      userPoints[chatId] -= 5;
+    } else {
+      userDailyLimit[chatId] = today;
+    }
+  }
 
-    await sleep(1000);
-    await bot.editMessageText(`\`[ENCRYPTION]\` Generating cryptographic tokens and hashing access key (SHA-256)...`, {
-      chat_id: chatId,
-      message_id: loadingMsg.message_id,
-      parse_mode: 'Markdown'
-    }).catch(() => {});
+  // Jalankan Animasi Proses Enkripsi
+  const loadingMsg = await bot.sendMessage(chatId, `\`[SYSTEM PROLOG]\` Connecting to virtual node pool \`${selectedDomain}\`...`, { parse_mode: 'Markdown' });
 
-    await sleep(1000);
-    await bot.editMessageText(`\`[COMPILING]\` Transmitting payload handshake to SMTP/IMAP network relays...`, {
-      chat_id: chatId,
-      message_id: loadingMsg.message_id,
-      parse_mode: 'Markdown'
-    }).catch(() => {});
+  await sleep(1000);
+  await bot.editMessageText(`\`[ENCRYPTION]\` Generating cryptographic tokens and hashing access key (SHA-256)...`, {
+    chat_id: chatId,
+    message_id: loadingMsg.message_id,
+    parse_mode: 'Markdown'
+  }).catch(() => {});
 
-    // Deploy Hasil Akhir
-    await sleep(800);
-    const fakeData = generateFakeEmail(selectedDomain);
-    const sisaPoinTeks = isAdmin ? 'Unlimited (Admin)' : `${userPoints[chatId]} Points`;
+  await sleep(1000);
+  await bot.editMessageText(`\`[COMPILING]\` Transmitting payload handshake to SMTP/IMAP network relays...`, {
+    chat_id: chatId,
+    message_id: loadingMsg.message_id,
+    parse_mode: 'Markdown'
+  }).catch(() => {});
 
-    const hasilSukses = `
+  // Deploy Hasil Akhir Pembuatan Email
+  await sleep(800);
+  const fakeData = generateFakeEmail(selectedDomain);
+  const sisaPoinTeks = isAdmin ? 'Unlimited (Admin)' : `${userPoints[chatId]} Points`;
+
+  const hasilSukses = `
 *VIRTUAL MAIL SERVER DEPLOYED SUCCESS*
 ───────────────────────
 Alokasi server sandbox virtual berhasil dibangun dan siap digunakan:
@@ -258,19 +266,17 @@ _Catatan: Ketuk satu kali pada bagian Email atau Password untuk menyalin data ke
 ───────────────────────
 `;
 
-    bot.editMessageText(hasilSukses, {
-      chat_id: chatId,
-      message_id: loadingMsg.message_id,
-      parse_mode: 'Markdown'
-    }).catch(() => {
-      // Cadangan jika editMessage gagal, bot akan mengirim pesan baru
-      bot.sendMessage(chatId, hasilSukses, { parse_mode: 'Markdown' });
-    });
-  }
-});
+  bot.editMessageText(hasilSukses, {
+    chat_id: chatId,
+    message_id: loadingMsg.message_id,
+    parse_mode: 'Markdown'
+  }).catch(() => {
+    bot.sendMessage(chatId, hasilSukses, { parse_mode: 'Markdown' });
+  });
+}
 
 // -------------------------------------------------------------
-// DIAGNOSTIC CHECK
+// CHECK POINT DIAGNOSTIC
 // -------------------------------------------------------------
 bot.onText(/\/CheckPoint/, (msg) => {
   const chatId = msg.chat.id;
@@ -339,7 +345,7 @@ Silakan lakukan transaksi penambahan poin lisensi atau aktivasi akun premium mel
 });
 
 // -------------------------------------------------------------
-// INJECTION COMMANDS: /isi
+// CONSOLE INJECTION: /isi
 // -------------------------------------------------------------
 bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
@@ -360,7 +366,7 @@ bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
 });
 
 // -------------------------------------------------------------
-// INJECTION COMMANDS: /premium
+// CONSOLE INJECTION: /premium
 // -------------------------------------------------------------
 bot.onText(/\/premium (\d+)/, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
