@@ -5,32 +5,26 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
   polling: true,
 });
 
-// AMBIL DARI FILE .ENV (Pastikan OWNER_ID berisi ANGKA Chat ID Telegram kamu)
 const OWNER_ID = process.env.OWNER_ID; 
+const OWNER_USERNAME = 'Emyawu'; 
 
-// Link Gambar QRIS (Ganti dengan link gambar QRIS asli milikmu)
-const QRIS_IMAGE_URL = 'https://qu.ax/g1eRh'; // Sementara menggunakan contoh, silakan ganti nanti
+const QRIS_IMAGE_URL = 'https://qu.ax/g1eRh'; 
 
-// Database sederhana berbasis RAM (Penyimpanan sementara)
+// Database sederhana berbasis RAM
 const userPoints = {};
+const userDailyLimit = {}; 
+const userPremiumUntil = {}; // Menyimpan tanggal kedaluwarsa E-Premium user
 
-// Daftar nama depan untuk kombinasi email realistis
+// Daftar data nama untuk generator email
 const firstNames = [
   'andi', 'budi', 'rizky', 'fajar', 'dika', 'reza', 'tomi', 'kevin', 'putra', 'ari',
   'siti', 'dewi', 'amanda', 'putri', 'santi', 'mega', 'rara', 'nisa', 'via', 'ayu',
   'ahmad', 'raffi', 'daffa', 'fian', 'gali', 'hadi', 'ilham', 'joko', 'kiki', 'lucky'
 ];
-
-// Variasi unsur "Emy" untuk nama belakang (Last Name)
 const emyLastNames = ['emy', 'emyx', 'zemy', 'cemy', 'xemy', 'emyc', 'emyz', 'vemy', 'lemy', 'qemy'];
 
-// Daftar domain email variatif
-const domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'];
-
-// Helper: Menunda eksekusi kode (untuk efek animasi)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Generate string acak untuk password
 function randomString(length) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -40,11 +34,10 @@ function randomString(length) {
   return result;
 }
 
-// Fungsi pembuat email tiruan realistis
-function generateFakeEmail() {
+// Fungsi generator email dengan input domain dinamis
+function generateFakeEmail(domain) {
   const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
   const emyLastName = emyLastNames[Math.floor(Math.random() * emyLastNames.length)];
-  const domain = domains[Math.floor(Math.random() * domains.length)];
   
   const randomNum = Math.floor(Math.random() * 899) + 100;
   const shortYear = new Date().getFullYear().toString().slice(-2);
@@ -65,11 +58,20 @@ function generateFakeEmail() {
   };
 }
 
-// Helper untuk memastikan user mendapatkan poin awal hanya SEKALI saat mendaftar
 function initializeUser(chatId) {
   if (userPoints[chatId] === undefined) {
-    userPoints[chatId] = 20; // Poin awal pendaftaran pertama kali
+    userPoints[chatId] = 20; 
   }
+}
+
+// Mengecek apakah user memiliki status E-Premium aktif
+function isUserPremium(chatId) {
+  if (String(chatId) === String(OWNER_ID)) return true; // Admin otomatis selalu premium
+  if (!userPremiumUntil[chatId]) return false;
+  
+  const now = new Date();
+  const expiry = new Date(userPremiumUntil[chatId]);
+  return now < expiry;
 }
 
 // -------------------------------------------------------------
@@ -81,94 +83,188 @@ bot.onText(/\/start/, (msg) => {
 
   initializeUser(chatId);
 
+  const isAdmin = String(chatId) === String(OWNER_ID);
+  const infoPoin = isAdmin ? '♾️ UNLIMITED (ADMIN)' : `${userPoints[chatId]} Poin`;
+  
+  // Tampilan status premium
+  let statusLisensi = '*FREE TIER*';
+  if (isAdmin) statusLisensi = '*PREMIUM PARTNER (OWNER)*';
+  else if (isUserPremium(chatId)) statusLisensi = `*E-PREMIUM ACTIVE* (Exp: ${new Date(userPremiumUntil[chatId]).toLocaleDateString('id-ID')})`;
+
   const menuText = `
-🤖 *WELCOME TO EMYCMAIL BOT*
-──────────────────────
-Halo *${username}* 👋, Selamat datang di Sistem Generator Email Tiruan pintar.
+⚡ *EMYCMAIL AUTOMATED CORE SYSTEM v3.5*
+───────────────────────
+Halo *${username}* 👋. Selamat datang di portal enkripsi otomatis pembuatan virtual mail server.
 
-📌 *MENU UTAMA:*
-🔹 /CreateMailR  🏼 Buat Email Baru (Biaya: 5 Poin)
-🔹 /CheckPoint   🏼 Cek Sisa Poin Kamu
-🔹 /TopupPoint   🏼 Isi Ulang Poin Via QRIS
+💻 *SYSTEM STATUS:*
+• API Status: \`ONLINE / OPERATIONAL\`
+• Server Security: \`Cloudflare SSL Protected\`
+• Lisensi Akun Anda: ${statusLisensi}
 
-💡 *Chat ID Kamu:* \`${chatId}\` _(Gunakan ID ini untuk konfirmasi top up ke Admin)_
+💰 *STATUS DOMPET:*
+• Saldo Poin Anda: *${infoPoin}*
+• Kuota Gratisan Harian: *1 Slot / Hari* (Khusus Gmail)
 
-⚠️ *Catatan:* Email ini bersifat tiruan/simulasi. Gunakan sistem ini dengan bijak!
-──────────────────────
+📌 *COMMANDS MENU PANEL:*
+🔹 /CreateMailR  🏼 Pilih & Deploy Domain Email Baru
+🔹 /CheckPoint   🏼 Cek Saldo Dompet Poin & Masa Premium
+🔹 /TopupPoint   🏼 Upgrade Lisensi / Pengisian Poin & E-Premium
+
+🆔 *UID Jaringan:* \`${chatId}\`
+───────────────────────
 `;
 
   bot.sendMessage(chatId, menuText, { parse_mode: 'Markdown' });
 });
 
 // -------------------------------------------------------------
-// COMMAND: /CreateMailR (Dengan Sistem Proteksi Poin & Animasi)
+// COMMAND: /CreateMailR (Memunculkan Pilihan Menu Domain)
 // -------------------------------------------------------------
-bot.onText(/\/CreateMailR/, async (msg) => {
+bot.onText(/\/CreateMailR/, (msg) => {
   const chatId = msg.chat.id;
-  
   initializeUser(chatId);
 
-  // FIX BUG POIN: Kunci akses jika poin kurang dari 5
-  if (userPoints[chatId] < 5) {
-    const infoGagal = `
-❌ *AKSES DITOLAK: POIN TIDAK CUKUP*
-──────────────────────
-Sisa Poin Kamu: *${userPoints[chatId]} Poin*
-Biaya Pembuatan: *5 Poin*
+  const teksPilihDomain = `
+🌐 *PORTAL SELEKSI MAIL DOMAIN*
+───────────────────────
+Silakan pilih basis domain server yang ingin Anda integrasikan ke dalam sistem virtual sandbox:
 
-Poin kamu tidak mencukupi untuk membuat email baru. Silakan lakukan pengisian ulang poin terlebih dahulu.
+📧 *DOMAIN LIST AVAILABLE:*
+1️⃣ *Gmail.com* -> \`FREE TIER\` (Gunakan 1 Kuota Harian atau 5 Poin)
+2️⃣ *Outlook.com* -> 👑 \`E-PREMIUM LISENSI\` (Akses Tanpa Potong Poin)
+3️⃣ *Yahoo.com* -> 👑 \`E-PREMIUM LISENSI\` (Akses Tanpa Potong Poin)
 
-👉 Silakan ketik atau klik: /TopupPoint
-──────────────────────
+👇 *Ketuk tombol di bawah ini untuk memilih:*
+───────────────────────
 `;
-    return bot.sendMessage(chatId, infoGagal, { parse_mode: 'Markdown' });
+
+  const opsiTombol = {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '🔴 Gmail.com (Free Tier)', callback_data: 'dom_gmail.com' }
+        ],
+        [
+          { text: '🔵 Outlook.com (E-Premium)', callback_data: 'dom_outlook.com' },
+          { text: '🟣 Yahoo.com (E-Premium)', callback_data: 'dom_yahoo.com' }
+        ]
+      ]
+    }
+  };
+
+  bot.sendMessage(chatId, teksPilihDomain, opsiTombol);
+});
+
+// -------------------------------------------------------------
+// HANDLING SELEKSI DOMAIN (Callback Query)
+// -------------------------------------------------------------
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data;
+
+  // Hapus pesan seleksi agar chat rapi
+  bot.deleteMessage(chatId, msg.message_id).catch(() => {});
+
+  if (data.startsWith('dom_')) {
+    const selectedDomain = data.split('_')[1];
+    const today = new Date().toDateString();
+    const isAdmin = String(chatId) === String(OWNER_ID);
+
+    // LOGIKA JIKA PILIH OUTLOOK / YAHOO (WAJIB E-PREMIUM)
+    if (selectedDomain === 'outlook.com' || selectedDomain === 'yahoo.com') {
+      if (!isUserPremium(chatId)) {
+        const teksTolakPremium = `
+❌ *AKSES DITOLAK: REQUIRE E-PREMIUM LISENSI*
+───────────────────────
+Domain *${selectedDomain}* merupakan jalur server dedicated berkecepatan tinggi. 
+
+• Status Akun Anda: *FREE TIER (Tidak Diizinkan)*
+• Biaya Aktivasi: *Rp 10.000 / 2 Minggu*
+
+👑 *Keuntungan Lisensi E-Premium:*
+• Bebas generate domain \`outlook.com\` & \`yahoo.com\` sepuasnya.
+• Bypass pembatasan limit harian bot.
+• Server prioritas tanpa antrean enkripsi database.
+
+👉 Ketik /TopupPoint untuk petunjuk aktivasi paket E-Premium melalui Admin.
+───────────────────────
+`;
+        return bot.sendMessage(chatId, teksTolakPremium, { parse_mode: 'Markdown' });
+      }
+    }
+
+    // LOGIKA JIKA PILIH GMAIL (MENGGUNAKAN LIMIT HARIAN ATAU POIN)
+    if (selectedDomain === 'gmail.com' && !isAdmin) {
+      if (userPoints[chatId] < 5 && userDailyLimit[chatId] === today) {
+        const teksLimitHabis = `
+⚠️ *SECURITY LOG: LIMIT HARIAN TERCAPAI*
+───────────────────────
+Sistem mendeteksi lisensi *FREE TIER* Anda telah menggunakan kuota generator otomatis untuk hari ini.
+
+• Batasan Akun: *1 Email / Hari*
+• Status Hari Ini: *0 Slot Tersisa*
+
+👉 Silakan lakukan pengisian ulang poin premium untuk mem-bypass limit harian: /TopupPoint
+───────────────────────
+`;
+        return bot.sendMessage(chatId, teksLimitHabis, { parse_mode: 'Markdown' });
+      }
+
+      // Potong saldo/kuota harian
+      if (userPoints[chatId] >= 5) {
+        userPoints[chatId] -= 5;
+      } else {
+        userDailyLimit[chatId] = today;
+      }
+    }
+
+    // 🎬 PROSES PRANK ANIMASI DEPLOY EMAIL REALISTIS
+    const loadingMsg = await bot.sendMessage(chatId, `🌀 *[⚡ 15%]* Mengontak DNS Virtual Server untuk cluster \`${selectedDomain}\`...`, { parse_mode: 'Markdown' });
+
+    await sleep(1200);
+    await bot.editMessageText('⚙️ *[⚡ 52%]* Menyinkronkan enkapsulasi data privasi dan menyusun sandi acak...', {
+      chat_id: chatId,
+      message_id: loadingMsg.message_id,
+      parse_mode: 'Markdown'
+    });
+
+    await sleep(1200);
+    await bot.editMessageText('🚀 *[⚡ 90%]* Menembus sistem keamanan SMTP gateway global mail...', {
+      chat_id: chatId,
+      message_id: loadingMsg.message_id,
+      parse_mode: 'Markdown'
+    });
+
+    // Selesai Pembuatan
+    await sleep(1000);
+    const fakeData = generateFakeEmail(selectedDomain);
+    const sisaPoinTeks = isAdmin ? '♾️ UNLIMITED (ADMIN)' : `${userPoints[chatId]} Poin`;
+
+    const hasilSukses = `
+✨ *VIRTUAL MAIL SERVER DEPLOYED SUCCESS*
+───────────────────────
+Sistem Cloud berhasil mengaktifkan server email tiruan baru Anda:
+
+📧 *VIRTUAL EMAIL:* \`${fakeData.email}\`
+🔑 *KEY ACCESS/PW:* \`${fakeData.password}\`
+
+📈 *METADATA STATUS:*
+• Jalur Domain: \`${selectedDomain.toUpperCase()}\`
+• Sisa Saldo Poin: *${sisaPoinTeks}*
+• Akses Node: \`SECURE / INJECTED\`
+
+💡 _Tips Teknis: Klik sekali pada teks Alamat Email atau Password di atas untuk menyalin otomatis._
+───────────────────────
+`;
+
+    bot.editMessageText(hasilSukses, {
+      chat_id: chatId,
+      message_id: loadingMsg.message_id,
+      parse_mode: 'Markdown'
+    });
   }
-
-  // Potong poin di awal untuk mencegah eksploitasi spamming
-  userPoints[chatId] -= 5;
-
-  // Animasi Pembuatan Realistis - Langkah 1
-  const loadingMsg = await bot.sendMessage(chatId, '⏳ *[1/3]* Menghubungkan ke server database email...', { parse_mode: 'Markdown' });
-
-  // Animasi Langkah 2
-  await sleep(1500);
-  await bot.editMessageText('⚙️ *[2/3]* Mengonstruksi nama pengguna & menyusun password aman...', {
-    chat_id: chatId,
-    message_id: loadingMsg.message_id,
-    parse_mode: 'Markdown'
-  });
-
-  // Animasi Langkah 3
-  await sleep(1500);
-  await bot.editMessageText('🚀 *[3/3]* Mengenkripsi data pembuatan dan mematangkan enkripsi...', {
-    chat_id: chatId,
-    message_id: loadingMsg.message_id,
-    parse_mode: 'Markdown'
-  });
-
-  // Pembuatan email final selesai
-  await sleep(1000);
-  const fakeData = generateFakeEmail();
-
-  const hasilSukses = `
-✅ *EMAIL BERHASIL GENERATE*
-──────────────────────
-📧 *EMAIL:* \`${fakeData.email}\`
-🔑 *PASSWORD:* \`${fakeData.password}\`
-
-💎 *BIAYA:* 5 Poin
-💰 *SISA POIN KAMU:* ${userPoints[chatId]} Poin
-
-💡 _Tips: Kamu bisa menyalin teks di atas dengan sekali ketuk pada bagian Email/Password._
-──────────────────────
-`;
-
-  // Tampilkan hasil akhir dengan mengedit pesan loading tadi
-  bot.editMessageText(hasilSukses, {
-    chat_id: chatId,
-    message_id: loadingMsg.message_id,
-    parse_mode: 'Markdown'
-  });
 });
 
 // -------------------------------------------------------------
@@ -176,46 +272,50 @@ Poin kamu tidak mencukupi untuk membuat email baru. Silakan lakukan pengisian ul
 // -------------------------------------------------------------
 bot.onText(/\/CheckPoint/, (msg) => {
   const chatId = msg.chat.id;
-  
   initializeUser(chatId);
 
-  const poinText = `
-💰 *INFORMASI DOMPET POIN*
-──────────────────────
-Sisa saldo poin akun Anda saat ini adalah:
-👉 *${userPoints[chatId]} Poin*
+  const isAdmin = String(chatId) === String(OWNER_ID);
+  const infoPoin = isAdmin ? '♾️ UNLIMITED (ADMIN MODE)' : `${userPoints[chatId]} Poin`;
+  
+  let infoPremium = '`TIDAK AKTIF`';
+  if (isAdmin) infoPremium = '`PERMANEN DEVELOPER`';
+  else if (isUserPremium(chatId)) infoPremium = `\`AKTIF\` (Sampai: ${new Date(userPremiumUntil[chatId]).toLocaleDateString('id-ID')})`;
 
-Gunakan saldo poin Anda untuk melakukan generate email otomatis lewat menu /CreateMailR.
-──────────────────────
+  const poinText = `
+🔑 *SECURITY DATABASE: ENKRIPSI CREDENTIALS*
+───────────────────────
+Hasil sinkronisasi data akun pada cloud:
+
+• Alokasi Saldo Poin: *${infoPoin}*
+• Status Paket E-Premium: ${infoPremium}
+• Jalur Akses Premium: ${isAdmin || isUserPremium(chatId) ? '`UNLIMITED NODE`' : '`RESTRICTED / GMAIL ONLY`'}
+───────────────────────
 `;
   bot.sendMessage(chatId, poinText, { parse_mode: 'Markdown' });
 });
 
 // -------------------------------------------------------------
-// COMMAND: /TopupPoint (QRIS & Tombol Kontak Admin Interaktif)
+// COMMAND: /TopupPoint
 // -------------------------------------------------------------
 bot.onText(/\/TopupPoint/, (msg) => {
   const chatId = msg.chat.id;
 
   const topupCaption = `
-💳 *MENU PENGISIAN ULANG POIN (TOP UP)*
-──────────────────────
-Dapatkan poin instan untuk terus membuat email tiruan premium tanpa batas.
+💳 *PORTAL RECHARGE POIN & LISENSI E-PREMIUM*
+───────────────────────
+Lakukan peningkatan akun untuk membuka batasan limit harian dan membuka jalur domain premium eksklusif.
 
-💵 *DAFTAR HARGA POIN:*
-• Rp 5.000  🏼 50 Poin
-• Rp 10.000 🏼 120 Poin (Bonus 20 Poin!)
-• Rp 20.000 🏼 300 Poin (Paling Hemat!)
+📊 *DAFTAR HARGA LISENSI SERVER:*
+• 🟢 *Lite Node:* Rp 5.000   🏼 +50 Poin Premium (Gmail Only)
+• 🔵 *Mega Node:* Rp 10.000  🏼 +120 Poin Premium (Gmail Only)
+• 👑 *E-PREMIUM NODE:* Rp 10.000 🏼 Masa Aktif 2 Minggu (Bebas Generate domain Outlook.com & Yahoo.com Sepuasnya Tanpa Potong Poin!)
 
-📌 *LANGKAH-LANGKAH TRANSFER:*
-1. Scan kode *QRIS* di atas menggunakan aplikasi E-Wallet (Dana, OVO, GoPay) atau m-Banking Anda.
-2. Masukkan nominal pembayaran sesuai paket poin yang ingin dibeli.
-3. Setelah transfer sukses, simpan bukti transfernya.
-4. Kirimkan bukti pembayaran dan sertakan Chat ID kamu (\`${chatId}\`) ke admin dengan menekan tombol dibawah ini.
-──────────────────────
+📌 *PROSEDUR TRANSAKSI:*
+1. Scan *QRIS Gateway* di atas lewat OVO/Dana/GoPay/LinkAja Anda.
+2. Kirim berkas gambar Bukti Transfer beserta nomor UID Anda (\`${chatId}\`) ke Jaringan Admin Utama untuk proses injeksi instan.
+───────────────────────
 `;
 
-  // Membuat tombol interaktif di bawah gambar QRIS
   const buttonOptions = {
     caption: topupCaption,
     parse_mode: 'Markdown',
@@ -223,64 +323,69 @@ Dapatkan poin instan untuk terus membuat email tiruan premium tanpa batas.
       inline_keyboard: [
         [
           {
-            text: '💬 Hubungi Admin untuk Konfirmasi',
-            url: `https://t.me/EmyCMail` // Otomatis mengarah ke telegram bot/admin
+            text: '💬 Hubungi Secure Admin (@Emyawu)',
+            url: `https://t.me/${OWNER_USERNAME}`
           }
         ]
       ]
     }
   };
 
-  // Kirim gambar QRIS + Deskripsi teks + Tombol
   bot.sendPhoto(chatId, QRIS_IMAGE_URL, buttonOptions);
 });
 
 // -------------------------------------------------------------
-// COMMAND KHUSUS ADMIN/OWNER: /isi [Chat_ID_User] [Jumlah_Poin]
+// COMMAND ADMIN: /isi [Chat_ID_User] [Jumlah_Poin]
 // -------------------------------------------------------------
 bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
   const targetUserChatId = match[1]; 
   const pointsToAdd = parseInt(match[2]); 
 
-  // PROTEKSI KEAMANAN: Perintah isi poin hanya bekerja jika dikirim oleh OWNER_ID asli
   if (String(chatIdAdmin) !== String(OWNER_ID)) {
-    return bot.sendMessage(chatIdAdmin, "❌ *AKSES DITOLAK:* Anda bukan pemilik sah bot ini.", { parse_mode: 'Markdown' });
+    return bot.sendMessage(chatIdAdmin, "❌ *ACCESS DENIED:* Perintah khusus developer utama.", { parse_mode: 'Markdown' });
   }
 
-  // Daftarkan ke RAM jika user tujuan belum pernah mengklik /start sebelumnya
-  if (userPoints[targetUserChatId] === undefined) {
-    userPoints[targetUserChatId] = 20; 
-  }
-
-  // Tambahkan jumlah poin ke target user
+  if (userPoints[targetUserChatId] === undefined) userPoints[targetUserChatId] = 20; 
   userPoints[targetUserChatId] += pointsToAdd;
 
-  // 1. Notifikasi Sukses untuk layar Handphone ADMIN
-  bot.sendMessage(chatIdAdmin, `✅ *TOP UP BERHASIL*
-──────────────────────
-Target ID: \`${targetUserChatId}\`
-Jumlah Poin: *+${pointsToAdd} Poin*
-Total Poin Sekarang: *${userPoints[targetUserChatId]} Poin*
-──────────────────────`, { parse_mode: 'Markdown' });
+  bot.sendMessage(chatIdAdmin, `✅ *POIN INJECTED SUCCESS*\nTarget UID: \`${targetUserChatId}\`\nPoin Masuk: *+${pointsToAdd}*\nTotal Saldo: *${userPoints[targetUserChatId]} Poin*`, { parse_mode: 'Markdown' });
 
-  // 2. Notifikasi Sukses Otomatis (Konfirmasi) Langsung Masuk ke Layar USER target
-  const pesanKeUser = `
-🎉 *TOP UP POIN BERHASIL DIKONFIRMASI*
-──────────────────────
-Halo, Admin telah berhasil memverifikasi pembayaran Anda.
-
-🎁 *POIN MASUK:* +${pointsToAdd} Poin
-💰 *TOTAL POIN KAMU SEKARANG:* ${userPoints[targetUserChatId]} Poin
-
-Terima kasih sudah melakukan pengisian! Poin sudah siap digunakan kembali, silakan ketik /CreateMailR.
-──────────────────────
-`;
-  
-  bot.sendMessage(targetUserChatId, pesanKeUser, { parse_mode: 'Markdown' })
-    .catch((err) => {
-      console.log(`Gagal mengirim pesan ke user ${targetUserChatId}:`, err.message);
-    });
+  const pesanKeUser = `🎉 *TOP UP POIN PREMIUM DIKONFIRMASI*\n\n• Poin Masuk: *+${pointsToAdd} Poin*\n• Total Saldo Lisensi: *${userPoints[targetUserChatId]} Poin*\n\nSilakan jalankan kembali menu /CreateMailR!`;
+  bot.sendMessage(targetUserChatId, pesanKeUser, { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-console.log('EmyCMail Bot berhasil dijalankan dan siap digunakan!');
+// -------------------------------------------------------------
+// COMMAND ADMIN BARU: /premium [Chat_ID_User] (Mengaktifkan E-Premium 2 Minggu)
+// -------------------------------------------------------------
+bot.onText(/\/premium (\d+)/, (msg, match) => {
+  const chatIdAdmin = msg.chat.id;
+  const targetUserChatId = match[1];
+
+  if (String(chatIdAdmin) !== String(OWNER_ID)) {
+    return bot.sendMessage(chatIdAdmin, "❌ *ACCESS DENIED:* Perintah khusus developer utama.", { parse_mode: 'Markdown' });
+  }
+
+  // Hitung tanggal kedalwarsa 14 hari kedepan (2 Minggu)
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() + 14);
+  userPremiumUntil[targetUserChatId] = expiryDate.toISOString();
+
+  bot.sendMessage(chatIdAdmin, `👑 *E-PREMIUM LICENSE ACTIVATED*\nTarget UID: \`${targetUserChatId}\`\nMasa Aktif: *2 Minggu* (Hingga: ${expiryDate.toLocaleDateString('id-ID')})`, { parse_mode: 'Markdown' });
+
+  const pesanKeUser = `
+👑 *PRO PORTAL ACTIVATED: LICENSE E-PREMIUM UPGRADE*
+───────────────────────
+Selamat! Server Admin telah menyuntikkan lisensi paket *E-Premium* ke akun Anda.
+
+• Masa Aktif: *2 Minggu / 14 Hari*
+• Hak Akses Domain: \`Outlook.com\` & \`Yahoo.com\` (DIBUKA ✔️)
+• Sistem Kuota: \`UNLIMITED GENERATE (0 POIN SECORES)\`
+
+Terima kasih atas kontribusi Anda. Silakan deploy email premium Anda sekarang di /CreateMailR!
+───────────────────────
+`;
+  bot.sendMessage(targetUserChatId, pesanKeUser, { parse_mode: 'Markdown' }).catch(()=>{});
+});
+
+console.log('EmyCMail Bot (V3.5 Prank Premium) sukses dijalankan!');
