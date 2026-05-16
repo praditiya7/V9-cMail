@@ -1,6 +1,7 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 
+// Inisialisasi Bot
 const bot = new TelegramBot(process.env.BOT_TOKEN, {
   polling: true,
 });
@@ -9,7 +10,7 @@ const OWNER_ID = process.env.OWNER_ID;
 const OWNER_USERNAME = 'Emyawu'; 
 const QRIS_IMAGE_URL = 'https://picsum.photos/500/500'; 
 
-// Database RAM
+// Database RAM Sementara
 const userPoints = {};
 const userDailyLimit = {}; 
 const userPremiumUntil = {}; 
@@ -71,112 +72,37 @@ function isUserPremium(chatId) {
 }
 
 // -------------------------------------------------------------
-// MENU START
+// FIX: CORES CALLBACK QUERY LISTENER (Dipastikan Merespons 100%)
 // -------------------------------------------------------------
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  const username = msg.from.first_name;
-
-  initializeUser(chatId);
-
-  const isAdmin = String(chatId) === String(OWNER_ID);
-  const infoPoin = isAdmin ? 'Unlimited (Developer Mode)' : `${userPoints[chatId]} Points`;
-  
-  let statusLisensi = 'Free Tier';
-  if (isAdmin) statusLisensi = 'Premium Enterprise (Owner)';
-  else if (isUserPremium(chatId)) statusLisensi = `E-Premium Active (Exp: ${new Date(userPremiumUntil[chatId]).toLocaleDateString('id-ID')})`;
-
-  const menuText = `
-*EMYCMAIL AUTOMATED SYSTEM v3.5*
-───────────────────────
-Selamat datang, *${username}*. Sistem siap mengonfigurasi dan mendeploy virtual mail server secara instan.
-
-*SYSTEM CONFIGURATION*
-• Core API: \`v3.5 / Operational\`
-• Security Node: \`Cloudflare Protected\`
-• Account License: *${statusLisensi}*
-
-*ACCOUNT BALANCE*
-• Available Balance: *${infoPoin}*
-• Daily Free Slot: *1 Email / Day* (Gmail Only)
-
-*SYSTEM PANEL COMMANDS*
-/CreateMailR - Select & deploy virtual mail server
-/CheckPoint - Diagnose database and check balance
-/TopupPoint - Upgrade account tier or recharge balance
-
-• Network UID: \`${chatId}\`
-───────────────────────
-`;
-
-  bot.sendMessage(chatId, menuText, { parse_mode: 'Markdown' });
-});
-
-// -------------------------------------------------------------
-// SELECT MAIL DOMAIN
-// -------------------------------------------------------------
-bot.onText(/\/CreateMailR/, (msg) => {
-  const chatId = msg.chat.id;
-  initializeUser(chatId);
-
-  const teksPilihDomain = `
-*DOMAIN DISTRIBUTION CENTER*
-───────────────────────
-Silakan pilih basis domain server yang ingin diintegrasikan ke jaringan virtual sandbox:
-
-*AVAILABLE MAIL INTERFACES:*
-1. *Gmail.com* (Free Tier Node)
-   • Cost: 1 Daily Slot / 5 Poin Allocation
-2. *Outlook.com* (E-Premium Dedicated Server)
-   • Cost: 0 Poin (Requires Active Subscription)
-3. *Yahoo.com* (E-Premium Dedicated Server)
-   • Cost: 0 Poin (Requires Active Subscription)
-
-_Pilih interaksi node melalui tombol di bawah ini:_
-───────────────────────
-`;
-
-  const opsiTombol = {
-    parse_mode: 'Markdown',
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: 'Gmail.com (Standard Node)', callback_data: 'dom_gmail.com' }
-        ],
-        [
-          { text: 'Outlook.com (E-Premium)', callback_data: 'dom_outlook.com' },
-          { text: 'Yahoo.com (E-Premium)', callback_data: 'dom_yahoo.com' }
-        ]
-      ]
-    }
-  };
-
-  bot.sendMessage(chatId, teksPilihDomain, opsiTombol);
-});
-
-// -------------------------------------------------------------
-// MAIN CALLBACK LISTENER (Menggunakan Struktur Global Paling Stabil)
-// -------------------------------------------------------------
-bot.on('callback_query', (callbackQuery) => {
+bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data;
   const msg = callbackQuery.message;
+  
+  if (!msg) return;
   const chatId = msg.chat.id;
 
-  // Langsung jawab callback di awal agar Telegram melepas status loading pada tombol
-  bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+  try {
+    // Beritahu Telegram bahwa sinyal tombol telah diterima (menghilangkan loading di tombol)
+    await bot.answerCallbackQuery(callbackQuery.id);
 
-  if (data && data.startsWith('dom_')) {
-    const selectedDomain = data.split('_')[1];
-    
-    // Hapus tombol pilihan agar bersih
-    bot.deleteMessage(chatId, msg.message_id).catch(() => {});
-    
-    // Alihkan pemrosesan ke fungsi terpisah agar tidak mengganggu internal event loop library
-    deployEmailProcess(chatId, selectedDomain);
+    // Filter aksi klik domain email
+    if (data && data.startsWith('dom_')) {
+      const selectedDomain = data.split('_')[1];
+      
+      // Hapus tombol pilihan lama agar tampilan chat bersih
+      await bot.deleteMessage(chatId, msg.message_id).catch(() => {});
+      
+      // Alihkan eksekusi ke modul generator email
+      await deployEmailProcess(chatId, selectedDomain);
+    }
+  } catch (error) {
+    console.error('Error handling callback query:', error.message);
   }
 });
 
-// Fungsi Terpisah untuk Mengamankan Eksekusi Sinkronisasi Data Email
+// -------------------------------------------------------------
+// SUBSYSTEM: GENERATOR & DEPLOYMENT SERVER EMAIL
+// -------------------------------------------------------------
 async function deployEmailProcess(chatId, selectedDomain) {
   initializeUser(chatId);
   const today = new Date().toDateString();
@@ -226,7 +152,7 @@ Silakan lakukan pengisian saldo premium melalui menu /TopupPoint.
     }
   }
 
-  // Jalankan Animasi Proses Enkripsi
+  // Animasi Pemrosesan Elegan
   const loadingMsg = await bot.sendMessage(chatId, `\`[SYSTEM PROLOG]\` Connecting to virtual node pool \`${selectedDomain}\`...`, { parse_mode: 'Markdown' });
 
   await sleep(1000);
@@ -243,7 +169,7 @@ Silakan lakukan pengisian saldo premium melalui menu /TopupPoint.
     parse_mode: 'Markdown'
   }).catch(() => {});
 
-  // Deploy Hasil Akhir Pembuatan Email
+  // Output Hasil Pembuatan Email
   await sleep(800);
   const fakeData = generateFakeEmail(selectedDomain);
   const sisaPoinTeks = isAdmin ? 'Unlimited (Admin)' : `${userPoints[chatId]} Points`;
@@ -266,7 +192,7 @@ _Catatan: Ketuk satu kali pada bagian Email atau Password untuk menyalin data ke
 ───────────────────────
 `;
 
-  bot.editMessageText(hasilSukses, {
+  await bot.editMessageText(hasilSukses, {
     chat_id: chatId,
     message_id: loadingMsg.message_id,
     parse_mode: 'Markdown'
@@ -276,7 +202,91 @@ _Catatan: Ketuk satu kali pada bagian Email atau Password untuk menyalin data ke
 }
 
 // -------------------------------------------------------------
-// CHECK POINT DIAGNOSTIC
+// COMMAND: /start
+// -------------------------------------------------------------
+bot.onText(/\/start/, (msg) => {
+  const chatId = msg.chat.id;
+  const username = msg.from.first_name;
+
+  initializeUser(chatId);
+
+  const isAdmin = String(chatId) === String(OWNER_ID);
+  const infoPoin = isAdmin ? 'Unlimited (Developer Mode)' : `${userPoints[chatId]} Points`;
+  
+  let statusLisensi = 'Free Tier';
+  if (isAdmin) statusLisensi = 'Premium Enterprise (Owner)';
+  else if (isUserPremium(chatId)) statusLisensi = `E-Premium Active (Exp: ${new Date(userPremiumUntil[chatId]).toLocaleDateString('id-ID')})`;
+
+  const menuText = `
+*EMYCMAIL AUTOMATED SYSTEM v3.5*
+───────────────────────
+Selamat datang, *${username}*. Sistem siap mengonfigurasi dan mendeploy virtual mail server secara instan.
+
+*SYSTEM CONFIGURATION*
+• Core API: \`v3.5 / Operational\`
+• Security Node: \`Cloudflare Protected\`
+• Account License: *${statusLisensi}*
+
+*ACCOUNT BALANCE*
+• Available Balance: *${infoPoin}*
+• Daily Free Slot: *1 Email / Day* (Gmail Only)
+
+*SYSTEM PANEL COMMANDS*
+/CreateMailR - Select & deploy virtual mail server
+/CheckPoint - Diagnose database and check balance
+/TopupPoint - Upgrade account tier or recharge balance
+
+• Network UID: \`${chatId}\`
+───────────────────────
+`;
+
+  bot.sendMessage(chatId, menuText, { parse_mode: 'Markdown' });
+});
+
+// -------------------------------------------------------------
+// COMMAND: /CreateMailR
+// -------------------------------------------------------------
+bot.onText(/\/CreateMailR/, (msg) => {
+  const chatId = msg.chat.id;
+  initializeUser(chatId);
+
+  const teksPilihDomain = `
+*DOMAIN DISTRIBUTION CENTER*
+───────────────────────
+Silakan pilih basis domain server yang ingin diintegrasikan ke jaringan virtual sandbox:
+
+*AVAILABLE MAIL INTERFACES:*
+1. *Gmail.com* (Free Tier Node)
+   • Cost: 1 Daily Slot / 5 Poin Allocation
+2. *Outlook.com* (E-Premium Dedicated Server)
+   • Cost: 0 Poin (Requires Active Subscription)
+3. *Yahoo.com* (E-Premium Dedicated Server)
+   • Cost: 0 Poin (Requires Active Subscription)
+
+_Pilih interaksi node melalui tombol di bawah ini:_
+───────────────────────
+`;
+
+  const opsiTombol = {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: 'Gmail.com (Standard Node)', callback_data: 'dom_gmail.com' }
+        ],
+        [
+          { text: 'Outlook.com (E-Premium)', callback_data: 'dom_outlook.com' },
+          { text: 'Yahoo.com (E-Premium)', callback_data: 'dom_yahoo.com' }
+        ]
+      ]
+    }
+  };
+
+  bot.sendMessage(chatId, teksPilihDomain, opsiTombol);
+});
+
+// -------------------------------------------------------------
+// COMMAND: /CheckPoint
 // -------------------------------------------------------------
 bot.onText(/\/CheckPoint/, (msg) => {
   const chatId = msg.chat.id;
@@ -303,7 +313,7 @@ Berhasil memuat sinkronisasi metadata enkripsi akun Anda dari awan:
 });
 
 // -------------------------------------------------------------
-// TOPUP PANEL
+// COMMAND: /TopupPoint
 // -------------------------------------------------------------
 bot.onText(/\/TopupPoint/, (msg) => {
   const chatId = msg.chat.id;
@@ -345,7 +355,7 @@ Silakan lakukan transaksi penambahan poin lisensi atau aktivasi akun premium mel
 });
 
 // -------------------------------------------------------------
-// CONSOLE INJECTION: /isi
+// ADMIN CONSOLE: /isi
 // -------------------------------------------------------------
 bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
@@ -366,7 +376,7 @@ bot.onText(/\/isi (\d+) (\d+)/, (msg, match) => {
 });
 
 // -------------------------------------------------------------
-// CONSOLE INJECTION: /premium
+// ADMIN CONSOLE: /premium
 // -------------------------------------------------------------
 bot.onText(/\/premium (\d+)/, (msg, match) => {
   const chatIdAdmin = msg.chat.id;
